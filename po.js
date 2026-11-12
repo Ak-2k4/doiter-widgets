@@ -1,7 +1,7 @@
 /* Doiter purchase orders for the Claude chat: the PO list, and a form to create one.
    The chat writes only the data, as JSON in <script type="application/json" id="doiter-po-data">,
    then one <script src> for this file. The data looks like:
-     { pos:     [["PO/26-27/01225","V035","Vishwak Packaging","2026-11-11","2026-11-18","OPEN",154.1], ...],
+     { pos:     [["PO/26-27/01225","V035","Vishwak Packaging","2026-11-11","2026-11-18","OPEN",154.1,2], ...],   // last: item count
        vendors: [["V035","Vishwak Packaging"], ...],
        items:   [["61260","Air bubble cover 10x13","NOS",6.53], ...],   // last price may be 0
        vp:      { V035: ["61260", ...] }, vendor: "V035" }
@@ -43,7 +43,7 @@
   var itemOf = function (c) { return items.filter(function (x) { return x[0] === c; })[0] || [c, c, "", 0]; };
 
   var GROUPS = [["OPEN", "Open", ["OPEN", "PART_RECEIVED"]], ["PENDING_APPROVAL", "Waiting approval", ["PENDING_APPROVAL"]],
-    ["DRAFT", "Drafts", ["DRAFT"]], ["ALL", "All recent", null]];
+    ["DRAFT", "Drafts", ["DRAFT"]], ["CLOSED", "Closed", ["CLOSED"]], ["CANCELLED", "Cancelled", ["CANCELLED"]], ["ALL", "All", null]];
   var BADGE = { OPEN: ["Open", "--bg-accent", "--text-accent"], PART_RECEIVED: ["Part received", "--bg-warning", "--text-warning"],
     PENDING_APPROVAL: ["Waiting approval", "--bg-warning", "--text-warning"], DRAFT: ["Draft", "--surface-1", "--text-secondary"],
     CLOSED: ["Closed", "--bg-success", "--text-success"], CANCELLED: ["Cancelled", "--surface-1", "--text-muted"] };
@@ -53,7 +53,7 @@
     + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><div id="dp-f" style="display:flex;gap:8px;flex-wrap:wrap;flex:1"></div>'
     + '<button type="button" id="dp-new">+ Create PO</button></div>'
     + '<div id="dp-list"><div class="dp-s"><i class="ti ti-search" aria-hidden="true"></i><input id="dp-q" placeholder="Search PO number or vendor" aria-label="Search purchase orders"></div>'
-    + '<div id="dp-pl" class="dp-L"></div></div>'
+    + '<div id="dp-pl" class="dp-L" style="max-height:440px;overflow-y:auto"></div><p class="dp-m" id="dp-cnt" style="margin:6px 0 0"></p></div>'
     + '<div id="dp-form" hidden style="display:grid;gap:18px">'
     + '<div><p class="dp-l">Vendor</p><div class="dp-s"><i class="ti ti-search" aria-hidden="true"></i><input id="dp-vq" placeholder="Type part of a vendor name or code" aria-label="Search vendors"></div><div id="dp-vl" class="dp-L"></div></div>'
     + '<div><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><p class="dp-l" id="dp-pt"></p><button type="button" id="dp-tg"></button></div>'
@@ -83,11 +83,12 @@
         : (p[5] === "OPEN" || p[5] === "PART_RECEIVED") ? ["Receive", "receive goods against " + p[0]]
         : p[5] === "DRAFT" ? ["Submit", "submit " + (p[0] || "the draft PO for " + p[2])] : null;
       return '<div class="dp-r"><span style="flex:1;min-width:0"><button type="button" class="dp-k dp-c" data-say="show ' + esc(p[0] || "the draft PO for " + p[2]) + '">' + esc(p[0] || "Draft") + "</button>"
-        + '<br><span class="dp-m">' + esc(p[1]) + " · " + esc(p[2]) + " · " + dmy(p[3]) + (p[4] ? " · needed " + dmy(p[4]) : "") + "</span></span>"
+        + '<br><span class="dp-m">' + esc(p[1]) + " · " + esc(p[2]) + " · " + dmy(p[3]) + (p[4] ? " · needed " + dmy(p[4]) : "") + (p[7] ? " · " + plural(p[7], "item") : "") + "</span></span>"
         + '<span class="dp-b" style="background:var(' + b[1] + ');color:var(' + b[2] + ')">' + b[0] + "</span>"
         + '<span class="dp-n" style="min-width:92px">' + inr(p[6]) + "</span>"
         + (act ? '<button type="button" data-say="' + esc(act[1]) + '">' + act[0] + " ↗</button>" : '<span style="width:84px"></span>') + "</div>";
     }).join("") || '<div class="dp-r dp-m">No purchase orders here.</div>';
+    $("dp-cnt").textContent = "Showing " + plural(rows.length, "purchase order") + " of " + pos.length + ", newest first.";
     $("dp-pl").querySelectorAll("[data-say]").forEach(function (b) { b.onclick = function () { sendPrompt(b.getAttribute("data-say")); }; });
   }
   function showList() { $("dp-list").hidden = false; $("dp-form").hidden = true; $("dp-f").hidden = false; $("dp-new").hidden = false; drawF(); drawList(); }
