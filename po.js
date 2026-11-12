@@ -117,9 +117,8 @@
       return '<div class="dp-r" style="flex-wrap:wrap"><input type="checkbox" data-k="' + esc(it[0]) + '"' + (on ? " checked" : "") + ' aria-label="Select ' + esc(it[1]) + '">'
         + '<span style="flex:1;min-width:160px"><span class="dp-c">' + esc(it[0]) + "</span> · " + esc(it[1])
         + (it[3] ? '<span class="dp-m"> · last ' + inr(it[3]) + "</span>" : "") + "</span>"
-        + (on ? '<input type="number" min="0" step="any" placeholder="Qty" data-q="' + esc(it[0]) + '" value="' + esc(l.q) + '" style="width:80px" aria-label="Quantity of ' + esc(it[0]) + '">'
-          + '<span class="dp-m" style="width:30px">' + esc(it[2]) + "</span>"
-          + '<input type="number" min="0" step="any" placeholder="Rate ₹" data-p="' + esc(it[0]) + '" value="' + esc(l.p) + '" style="width:90px" aria-label="Rate of ' + esc(it[0]) + '">' : "")
+        + (on ? '<label class="dp-m" style="display:flex;align-items:center;gap:4px">Qty <input type="number" min="0" step="any" placeholder="0" data-q="' + esc(it[0]) + '" value="' + esc(l.q) + '" style="width:76px" aria-label="Quantity of ' + esc(it[0]) + '"> ' + esc(it[2]) + "</label>"
+          + '<label class="dp-m" style="display:flex;align-items:center;gap:4px">Rate ₹ <input type="number" min="0" step="any" placeholder="0" data-p="' + esc(it[0]) + '" value="' + esc(l.p) + '" style="width:86px" aria-label="Rate of ' + esc(it[0]) + ' in rupees"> / ' + esc(it[2]) + "</label>" : "")
         + "</div>";
     }).join("") || '<div class="dp-r dp-m">' + (pool.length ? "No product matches. Try fewer letters." : "No products on record for " + esc(vname()) + " yet. Use Show all products.") + "</div>";
     root.querySelectorAll("[data-k]").forEach(function (c) {
