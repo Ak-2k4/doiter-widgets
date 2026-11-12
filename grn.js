@@ -13,6 +13,16 @@
   if (dataEl) { try { D = JSON.parse(dataEl.textContent); } catch (e) { D = {}; } }
   if (!root) return;
   var grns = D.grns || [], vendors = D.vendors || [], lines = D.lines || [];
+  // v9 packed data (smaller, so the chat writes less):
+  //   { c:1, v:{V035:"Vishwak Packaging"}, gp:"GRN/26-27/", g:[["04276","V035","261111","TEST-1111","C",154.11,1]],
+  //     pp:"PO/26-27/", l:[["01216","V035","61260",100,70,30,6.53]], i:{"61260":["Air bubble cover","NOS"]} }
+  if (D.c) {
+    var VN = D.v || {}, IT = D.i || {}, ST = { C: "CONFIRMED", D: "DRAFT", X: "CANCELLED" };
+    var ymd = function (s) { s = String(s || ""); return s.length === 6 ? "20" + s.slice(0, 2) + "-" + s.slice(2, 4) + "-" + s.slice(4, 6) : s; };
+    vendors = Object.keys(VN).map(function (k) { return [k, VN[k]]; });
+    grns = (D.g || []).map(function (r) { return [r[0] ? (D.gp || "") + r[0] : "", r[1], VN[r[1]] || "", ymd(r[2]), r[3], ST[r[4]] || r[4], r[5], r[6]]; });
+    lines = (D.l || []).map(function (r) { var it = IT[r[2]] || ["", ""]; return [(D.pp || "") + r[0], r[1], r[2], it[0], it[1], r[3], r[4], r[5], r[6]]; });
+  }
   var filter = "CONFIRMED", vendor = "", R = {};   // R: key "PO|item" -> received qty typed
 
   var css = ".dg-r{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:.5px solid var(--border);font-size:14px}"
@@ -144,7 +154,8 @@
   }
 
   $("dg-q").oninput = drawList;
-  $("dg-new").onclick = showForm;
+  // packed list data carries no PO lines: ask the chat for the receive form, which carries only those
+  $("dg-new").onclick = function () { if (D.c && !D.l) sendPrompt("receive goods"); else showForm(); };
   $("dg-back").onclick = showList;
   $("dg-vq").oninput = drawV;
   $("dg-go").onclick = function () {
