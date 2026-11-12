@@ -12,6 +12,15 @@
   if (dataEl) { try { D = JSON.parse(dataEl.textContent); } catch (e) { D = {}; } }
   if (!root) return;
   var pos = D.pos || [], vendors = D.vendors || [], items = D.items || [], vp = D.vp || {};
+  // v10 packed data (smaller, so the chat writes less). List: { c:1, v:{V035:"Vishwak Packaging"}, pp:"PO/26-27/",
+  //   p:[["01230","V035","261111","261118","A",385.28,1]] }  Create: { c:1, mode:"create", v:{...}, i:{"61260":["Air bubble cover","NOS",6.53]}, vp:{...} }
+  if (D.c) {
+    var VN = D.v || {}, IT = D.i || {}, ST = { O: "OPEN", R: "PART_RECEIVED", A: "PENDING_APPROVAL", D: "DRAFT", C: "CLOSED", X: "CANCELLED" };
+    var ymd = function (s) { s = String(s || ""); return s.length === 6 ? "20" + s.slice(0, 2) + "-" + s.slice(2, 4) + "-" + s.slice(4, 6) : s; };
+    vendors = Object.keys(VN).map(function (k) { return [k, VN[k]]; });
+    pos = (D.p || []).map(function (r) { return [r[0] ? (D.pp || "") + r[0] : "", r[1], VN[r[1]] || "", ymd(r[2]), ymd(r[3]), ST[r[4]] || r[4], r[5], r[6]]; });
+    items = Object.keys(IT).map(function (k) { return [k, IT[k][0], IT[k][1], IT[k][2] || 0]; });
+  }
   var vendor = D.vendor || (vendors[0] || [""])[0], filter = "OPEN", showAll = false, L = {};
 
   var css = ".dp-r{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:.5px solid var(--border);font-size:14px}"
@@ -139,7 +148,8 @@
   function showForm() { $("dp-list").hidden = true; $("dp-form").hidden = false; $("dp-f").hidden = true; $("dp-new").hidden = true; drawV(); drawI(); sum(); }
 
   $("dp-q").oninput = drawList;
-  $("dp-new").onclick = showForm;
+  // packed list data carries no products: ask the chat for the create form, which carries only those
+  $("dp-new").onclick = function () { if (D.c && !D.i) sendPrompt("create po"); else showForm(); };
   $("dp-back").onclick = showList;
   $("dp-vq").oninput = drawV;
   $("dp-iq").oninput = drawI;
