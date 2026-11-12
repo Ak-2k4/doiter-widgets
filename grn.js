@@ -11,6 +11,14 @@
   var root = document.getElementById("doiter-grn"), D = {};
   var dataEl = document.getElementById("doiter-grn-data");
   if (dataEl) { try { D = JSON.parse(dataEl.textContent); } catch (e) { D = {}; } }
+  // The list may carry the create form's data as D.next: its button redraws this widget with it in place,
+  // and Back redraws the list (D.back), with no chat message.
+  var SRC = (document.currentScript || {}).src;
+  var reinit = function (obj) {
+    if (!SRC || !dataEl) return false;
+    dataEl.textContent = JSON.stringify(obj); root.innerHTML = "";
+    var sc = document.createElement("script"); sc.src = SRC; document.body.appendChild(sc); return true;
+  };
   if (!root) return;
   var grns = D.grns || [], vendors = D.vendors || [], lines = D.lines || [];
   // v9 packed data (smaller, so the chat writes less):
@@ -184,8 +192,11 @@
 
   $("dg-q").oninput = drawList;
   // packed list data carries no PO lines: ask the chat for the receive form, which carries only those
-  $("dg-new").onclick = function () { if (D.c && !D.l) sendPrompt("receive goods"); else showForm(); };
-  $("dg-back").onclick = showList;
+  $("dg-new").onclick = function () {
+    if (D.next && reinit(Object.assign({}, D.next, { back: D }))) return;
+    if (D.c && !D.l) sendPrompt("receive goods"); else showForm();
+  };
+  $("dg-back").onclick = function () { if (D.back && reinit(D.back)) return; showList(); };
   $("dg-vq").oninput = drawV;
   $("dg-go").onclick = function () {
     var er = $("dg-er"), K = Object.keys(R);
