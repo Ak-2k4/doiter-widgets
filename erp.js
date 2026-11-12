@@ -13,7 +13,9 @@
        fields:[{ k, l, type: text|number|date|area|select|pick|chips|check, o:[[value, label]] or { byValue: [[value,label]] },
                  by: other field key (o is a map), def, req, ph, show:[key, value] }],
        lines:{ l, items:{ code:[name, uom, hint] }, by: field key, map:{ value:[[code, qty, rate]] }, all: true,
-               cols:[{ k, l, type: number|text|select, o, req, def: index into map row }], free: true (typed rows) } }   */
+               cols:[{ k, l, type: number|text|select, o, req, def: index into map row }], free: true (typed rows) }, hid: true (drawn only when opened) }
+   A list's top button [label, sentence, formIndex] or a row action [label, sentence, null, formIndex, {field: value, _head, _title}]
+   opens that hidden form in place (values prefill it), with a Back button; without a formIndex the sentence goes to the chat.   */
 (function () {
   var root = document.getElementById("doiter-erp"), D = {};
   var dataEl = document.getElementById("doiter-erp-data");
@@ -66,11 +68,22 @@
 
   var wrap = el('<div class="de-w"></div>').firstChild;
   root.appendChild(wrap);
-  (D.sections || []).forEach(function (s, i) {
-    var box = document.createElement("div"); wrap.appendChild(box);
-    try { ({ tiles: tiles, nav: nav, list: list, form: form }[s.t] || function () {})(box, s, i); }
+  var SEC = D.sections || [], BOX = [];
+  var draw1 = function (box, s, i, vals) {
+    try { ({ tiles: tiles, nav: nav, list: list, form: form }[s.t] || function () {})(box, s, i, vals); }
     catch (e) { box.innerHTML = '<p class="de-e">This part could not be drawn: ' + esc(e.message) + "</p>"; }
+  };
+  SEC.forEach(function (s, i) {
+    var box = document.createElement("div"); wrap.appendChild(box); BOX.push(box);
+    if (s.hid) box.style.display = "none"; else draw1(box, s, i);
   });
+  // A "+ New" button or a row's Edit opens a form shipped with the list, in place: no chat message.
+  function go(i, vals) {
+    BOX.forEach(function (b, j) { b.style.display = j === i ? "" : "none"; });
+    draw1(BOX[i], SEC[i], i, vals || null);
+    try { BOX[i].scrollIntoView({ block: "start" }); } catch (e) {}
+  }
+  function back() { BOX.forEach(function (b, j) { b.style.display = SEC[j].hid ? "none" : ""; }); }
 
   function tiles(box, s) {
     box.innerHTML = (s.title ? '<p class="de-h">' + esc(s.title) + "</p>" : "") + '<div class="de-t">' + (s.items || []).map(function (t) {
@@ -93,7 +106,7 @@
       + (s.search !== false ? '<div class="de-s"><i class="ti ti-search" aria-hidden="true"></i><input class="q" placeholder="' + esc(s.search || "Search") + '" aria-label="Search"></div>' : "")
       + '<div class="de-L body"></div>';
     var q = box.querySelector(".q"), body = box.querySelector(".body"), fl = box.querySelector(".fl");
-    box.querySelectorAll("[data-top]").forEach(function (b) { b.onclick = function () { send(s.top[+b.getAttribute("data-top")][1]); }; });
+    box.querySelectorAll("[data-top]").forEach(function (b) { b.onclick = function () { var t = s.top[+b.getAttribute("data-top")]; if (typeof t[2] === "number") go(t[2]); else send(t[1]); }; });
     function drawF() {
       if (!fl) return;
       var opts = f.opts.concat([["ALL", "All"]]);
@@ -141,7 +154,8 @@
       body.querySelectorAll("[data-a]").forEach(function (x) {
         x.onclick = function () {
           var p = x.getAttribute("data-a").split(":"), b = rows[+p[0]]._a[+p[1]];
-          if (b[2]) { ask[p[0]] = +p[1]; draw(); var inp = body.querySelector('.ask[data-i="' + p[0] + '"]'); if (inp) inp.focus(); }
+          if (typeof b[3] === "number") go(b[3], b[4]);
+          else if (b[2]) { ask[p[0]] = +p[1]; draw(); var inp = body.querySelector('.ask[data-i="' + p[0] + '"]'); if (inp) inp.focus(); }
           else send(b[1]);
         };
       });
@@ -158,7 +172,9 @@
     drawF(); draw();
   }
 
-  function form(box, s, si) {
+  function form(box, s, si, vals) {
+    if (vals) s = Object.assign({}, s, { head: vals._head || s.head, title: vals._title || s.title,
+      fields: (s.fields || []).map(function (f) { return f.k in vals ? Object.assign({}, f, { def: vals[f.k] }) : f; }) });
     var F = s.fields || [], LN = s.lines, V = {}, Q = {}, R = [], P = "f" + si + "-";
     F.forEach(function (f) { V[f.k] = f.def != null ? f.def : f.type === "check" ? false : ""; });
     var opts = function (f) { return Array.isArray(f.o) ? f.o : (f.o && f.o[V[f.by]]) || []; };
@@ -166,7 +182,9 @@
       + (LN ? '<div style="margin-top:14px"><p class="de-l">' + esc(LN.l || "Items") + "</p>"
         + (LN.free ? "" : '<div class="de-s"><i class="ti ti-search" aria-hidden="true"></i><input class="lq" placeholder="Type part of a product name or code" aria-label="Search products"></div>')
         + '<div class="de-L lines"></div>' + (LN.free ? '<button type="button" class="addr" style="margin-top:8px">+ Add line</button>' : "") + "</div>" : "")
-      + '<p class="de-e err"></p><div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:10px"><button type="button" class="go">' + esc(s.send || "Save") + ' ↗</button><span class="de-m sum"></span></div>';
+      + '<p class="de-e err"></p><div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:10px"><button type="button" class="go">' + esc(s.send || "Save") + ' ↗</button>'
+      + (s.hid ? '<button type="button" class="bk">← Back to the list</button>' : "") + '<span class="de-m sum"></span></div>';
+    if (s.hid) box.querySelector(".bk").onclick = back;
     var fl = box.querySelector(".flds"), lq = box.querySelector(".lq"), lines = box.querySelector(".lines"), err = box.querySelector(".err");
     function visible(f) { return !f.show || String(V[f.show[0]]) === String(f.show[1]); }
     function drawFields() {
