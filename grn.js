@@ -20,7 +20,13 @@
     var VN = D.v || {}, IT = D.i || {}, ST = { C: "CONFIRMED", D: "DRAFT", X: "CANCELLED" };
     var ymd = function (s) { s = String(s || ""); return s.length === 6 ? "20" + s.slice(0, 2) + "-" + s.slice(2, 4) + "-" + s.slice(4, 6) : s; };
     vendors = Object.keys(VN).map(function (k) { return [k, VN[k]]; });
-    grns = (D.g || []).map(function (r) { return [r[0] ? (D.gp || "") + r[0] : "", r[1], VN[r[1]] || "", ymd(r[2]), r[3], ST[r[4]] || r[4], r[5], r[6]]; });
+    // v11: a GRN row may also carry its details for the inline view:
+    //   [..., invoiceDate, invoiceAmount, taxable, tax, [[poTail, item, ordered, receivedBefore, received, rate, value], ...]]
+    grns = (D.g || []).map(function (r) {
+      var row = [r[0] ? (D.gp || "") + r[0] : "", r[1], VN[r[1]] || "", ymd(r[2]), r[3], ST[r[4]] || r[4], r[5], r[6]];
+      if (r.length > 7) row.push({ invDate: ymd(r[7]), invAmt: r[8], taxable: r[9], tax: r[10], lines: r[11] || [] });
+      return row;
+    });
     lines = (D.l || []).map(function (r) { var it = IT[r[2]] || ["", ""]; return [(D.pp || "") + r[0], r[1], r[2], it[0], it[1], r[3], r[4], r[5], r[6]]; });
   }
   var filter = "CONFIRMED", vendor = "", R = {};   // R: key "PO|item" -> received qty typed
@@ -86,20 +92,43 @@
     }).join("");
     $("dg-f").querySelectorAll("button").forEach(function (b) { b.onclick = function () { filter = b.getAttribute("data-g"); showList(); }; });
   }
+  var openRow = {};   // GRNs whose details are shown under their row
+  function detail(x) {
+    var d = x[8], IT = D.i || {};
+    if (!d) return "";
+    return '<div style="padding:4px 10px 12px 10px;border-bottom:.5px solid var(--border);background:var(--surface-1)">'
+      + '<p class="dg-m" style="margin:6px 0">Invoice ' + esc(x[4]) + (d.invDate ? " · dated " + dmy(d.invDate) : "") + (d.invAmt ? " · invoice amount " + inr(d.invAmt) : "") + "</p>"
+      + '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums">'
+      + '<tr style="color:var(--text-secondary);text-align:left"><th style="padding:4px 6px">PO</th><th style="padding:4px 6px">Item</th><th style="padding:4px 6px;text-align:right">Ordered</th><th style="padding:4px 6px;text-align:right">Received before</th><th style="padding:4px 6px;text-align:right">Received</th><th style="padding:4px 6px;text-align:right">Rate</th><th style="padding:4px 6px;text-align:right">Value</th></tr>'
+      + d.lines.map(function (l) {
+        var it = IT[l[1]] || ["", ""];
+        return '<tr style="border-top:.5px solid var(--border)"><td style="padding:4px 6px" class="dg-c">' + esc(l[0] ? (D.pp || "") + l[0] : "—") + '</td><td style="padding:4px 6px"><span class="dg-c">' + esc(l[1]) + "</span> " + esc(it[0])
+          + '</td><td style="padding:4px 6px;text-align:right">' + num(l[2]) + '</td><td style="padding:4px 6px;text-align:right">' + num(l[3]) + '</td><td style="padding:4px 6px;text-align:right"><b>' + num(l[4]) + "</b> " + esc(it[1])
+          + '</td><td style="padding:4px 6px;text-align:right">' + inr(l[5]) + '</td><td style="padding:4px 6px;text-align:right">' + inr(l[6]) + "</td></tr>";
+      }).join("") + "</table></div>"
+      + '<p style="margin:8px 0 0;font-size:13px;text-align:right">Taxable ' + inr(d.taxable) + " · GST " + inr(d.tax) + " · <b>Total " + inr(x[6]) + "</b></p></div>";
+  }
   function drawList() {
     var g = GROUPS.filter(function (x) { return x[0] === filter; })[0], q = $("dg-q").value;
     var rows = grns.filter(function (x) { return (!g[2] || g[2].indexOf(x[5]) >= 0) && hit(q, x[0] + " " + x[1] + " " + x[2] + " " + x[4]); });
-    $("dg-gl").innerHTML = rows.map(function (x) {
+    $("dg-gl").innerHTML = rows.map(function (x, n) {
       var b = BADGE[x[5]] || [x[5], "--surface-1", "--text-secondary"];
       var act = x[5] === "DRAFT" ? ["Confirm", "confirm " + (x[0] || "the draft GRN for invoice " + x[4])] : null;
-      return '<div class="dg-r"><span style="flex:1;min-width:0"><button type="button" class="dg-k dg-c" data-say="show ' + esc(x[0] || "the draft GRN for invoice " + x[4]) + '">' + esc(x[0] || "Draft") + "</button>"
+      var key = x[0] || "draft-" + x[4], open = openRow[key];
+      var head = x[8] ? '<button type="button" class="dg-k dg-c" data-open="' + esc(key) + '" aria-expanded="' + !!open + '">' + (open ? "▾ " : "▸ ") + esc(x[0] || "Draft") + "</button>"
+        : '<button type="button" class="dg-k dg-c" data-say="show ' + esc(x[0] || "the draft GRN for invoice " + x[4]) + '">' + esc(x[0] || "Draft") + "</button>";
+      return '<div class="dg-r"><span style="flex:1;min-width:0">' + head
         + '<br><span class="dg-m">' + esc(x[1]) + " · " + esc(x[2]) + " · " + dmy(x[3]) + (x[4] ? " · invoice " + esc(x[4]) : "") + (x[7] ? " · " + plural(x[7], "item") : "") + "</span></span>"
         + '<span class="dg-b" style="background:var(' + b[1] + ');color:var(' + b[2] + ')">' + b[0] + "</span>"
         + '<span class="dg-n" style="min-width:92px">' + inr(x[6]) + "</span>"
-        + (act ? '<button type="button" data-say="' + esc(act[1]) + '">' + act[0] + " ↗</button>" : '<span style="width:84px"></span>') + "</div>";
+        + (act ? '<button type="button" data-say="' + esc(act[1]) + '">' + act[0] + " ↗</button>" : '<span style="width:84px"></span>') + "</div>"
+        + (open ? detail(x) : "");
     }).join("") || '<div class="dg-r dg-m">No GRNs here.</div>';
     $("dg-cnt").textContent = "Showing " + plural(rows.length, "GRN") + " of " + grns.length + ", newest first.";
     $("dg-gl").querySelectorAll("[data-say]").forEach(function (b) { b.onclick = function () { sendPrompt(b.getAttribute("data-say")); }; });
+    $("dg-gl").querySelectorAll("[data-open]").forEach(function (b) {
+      b.onclick = function () { var k = b.getAttribute("data-open"); openRow[k] = !openRow[k]; var top = $("dg-gl").scrollTop; drawList(); $("dg-gl").scrollTop = top; };
+    });
   }
   function showList() { $("dg-list").hidden = false; $("dg-form").hidden = true; $("dg-f").hidden = false; $("dg-new").hidden = false; drawF(); drawList(); }
 
