@@ -18,7 +18,13 @@
     var VN = D.v || {}, IT = D.i || {}, ST = { O: "OPEN", R: "PART_RECEIVED", A: "PENDING_APPROVAL", D: "DRAFT", C: "CLOSED", X: "CANCELLED" };
     var ymd = function (s) { s = String(s || ""); return s.length === 6 ? "20" + s.slice(0, 2) + "-" + s.slice(2, 4) + "-" + s.slice(4, 6) : s; };
     vendors = Object.keys(VN).map(function (k) { return [k, VN[k]]; });
-    pos = (D.p || []).map(function (r) { return [r[0] ? (D.pp || "") + r[0] : "", r[1], VN[r[1]] || "", ymd(r[2]), ymd(r[3]), ST[r[4]] || r[4], r[5], r[6]]; });
+    // v12: a PO row may also carry its details for the inline view:
+    //   [..., basic, cgst, sgst, igst, [[item, qty, received, rate, amountBeforeGst], ...]]
+    pos = (D.p || []).map(function (r) {
+      var row = [r[0] ? (D.pp || "") + r[0] : "", r[1], VN[r[1]] || "", ymd(r[2]), ymd(r[3]), ST[r[4]] || r[4], r[5], r[6]];
+      if (r.length > 7) row.push({ basic: r[7], cgst: r[8], sgst: r[9], igst: r[10], lines: r[11] || [] });
+      return row;
+    });
     items = Object.keys(IT).map(function (k) { return [k, IT[k][0], IT[k][1], IT[k][2] || 0]; });
   }
   var vendor = D.vendor || (vendors[0] || [""])[0], filter = "OPEN", showAll = false, L = {};
@@ -84,6 +90,24 @@
     }).join("");
     $("dp-f").querySelectorAll("button").forEach(function (b) { b.onclick = function () { filter = b.getAttribute("data-g"); showList(); }; });
   }
+  var openRow = {};   // POs whose details are shown under their row
+  function detail(p) {
+    var d = p[8], IT = D.i || {};
+    if (!d) return "";
+    var td = 'style="padding:4px 6px;text-align:right"';
+    return '<div style="padding:4px 10px 12px 10px;border-bottom:.5px solid var(--border);background:var(--surface-1)">'
+      + '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums">'
+      + '<tr style="color:var(--text-secondary);text-align:left"><th style="padding:4px 6px">Item</th><th ' + td + '>Qty</th><th ' + td + '>Received</th><th ' + td + '>Rate</th><th ' + td + '>Amount (before GST)</th></tr>'
+      + d.lines.map(function (l) {
+        var it = IT[l[0]] || [l[0], ""];
+        return '<tr style="border-top:.5px solid var(--border)"><td style="padding:4px 6px"><span class="dp-c">' + esc(l[0]) + "</span> " + esc(it[0])
+          + "</td><td " + td + ">" + Number(l[1]).toLocaleString("en-IN") + " " + esc(it[1]) + "</td><td " + td + ">" + Number(l[2]).toLocaleString("en-IN")
+          + "</td><td " + td + ">" + inr(l[3]) + "</td><td " + td + ">" + inr(l[4]) + "</td></tr>";
+      }).join("") + "</table></div>"
+      + '<p style="margin:8px 0 0;font-size:13px;text-align:right">Basic ' + inr(d.basic)
+      + (d.igst ? " · IGST " + inr(d.igst) : " · CGST " + inr(d.cgst) + " · SGST " + inr(d.sgst))
+      + " · <b>Total " + inr(p[6]) + "</b></p></div>";
+  }
   function drawList() {
     var g = GROUPS.filter(function (x) { return x[0] === filter; })[0], q = $("dp-q").value;
     var rows = pos.filter(function (p) { return (!g[2] || g[2].indexOf(p[5]) >= 0) && hit(q, p[0] + " " + p[1] + " " + p[2]); });
@@ -92,12 +116,19 @@
       var act = p[5] === "PENDING_APPROVAL" ? ["Approve", "approve " + p[0]]
         : (p[5] === "OPEN" || p[5] === "PART_RECEIVED") ? ["Receive", "receive goods against " + p[0]]
         : p[5] === "DRAFT" ? ["Submit", "submit " + (p[0] || "the draft PO for " + p[2])] : null;
-      return '<div class="dp-r"><span style="flex:1;min-width:0"><button type="button" class="dp-k dp-c" data-say="show ' + esc(p[0] || "the draft PO for " + p[2]) + '">' + esc(p[0] || "Draft") + "</button>"
+      var key = p[0] || "draft-" + p[3] + "-" + p[6], open = openRow[key];
+      var head = p[8] ? '<button type="button" class="dp-k dp-c" data-open="' + esc(key) + '" aria-expanded="' + !!open + '">' + (open ? "▾ " : "▸ ") + esc(p[0] || "Draft") + "</button>"
+        : '<button type="button" class="dp-k dp-c" data-say="show ' + esc(p[0] || "the draft PO for " + p[2]) + '">' + esc(p[0] || "Draft") + "</button>";
+      return '<div class="dp-r"><span style="flex:1;min-width:0">' + head
         + '<br><span class="dp-m">' + esc(p[1]) + " · " + esc(p[2]) + " · " + dmy(p[3]) + (p[4] ? " · needed " + dmy(p[4]) : "") + (p[7] ? " · " + plural(p[7], "item") : "") + "</span></span>"
         + '<span class="dp-b" style="background:var(' + b[1] + ');color:var(' + b[2] + ')">' + b[0] + "</span>"
         + '<span class="dp-n" style="min-width:92px">' + inr(p[6]) + "</span>"
-        + (act ? '<button type="button" data-say="' + esc(act[1]) + '">' + act[0] + " ↗</button>" : '<span style="width:84px"></span>') + "</div>";
+        + (act ? '<button type="button" data-say="' + esc(act[1]) + '">' + act[0] + " ↗</button>" : '<span style="width:84px"></span>') + "</div>"
+        + (open ? detail(p) : "");
     }).join("") || '<div class="dp-r dp-m">No purchase orders here.</div>';
+    $("dp-pl").querySelectorAll("[data-open]").forEach(function (b) {
+      b.onclick = function () { var k = b.getAttribute("data-open"); openRow[k] = !openRow[k]; var top = $("dp-pl").scrollTop; drawList(); $("dp-pl").scrollTop = top; };
+    });
     $("dp-cnt").textContent = "Showing " + plural(rows.length, "purchase order") + " of " + pos.length + ", newest first.";
     $("dp-pl").querySelectorAll("[data-say]").forEach(function (b) { b.onclick = function () { sendPrompt(b.getAttribute("data-say")); }; });
   }
@@ -149,7 +180,7 @@
 
   $("dp-q").oninput = drawList;
   // packed list data carries no products: ask the chat for the create form, which carries only those
-  $("dp-new").onclick = function () { if (D.c && !D.i) sendPrompt("create po"); else showForm(); };
+  $("dp-new").onclick = function () { if (D.c && D.mode !== "create") sendPrompt("create po"); else showForm(); };
   $("dp-back").onclick = showList;
   $("dp-vq").oninput = drawV;
   $("dp-iq").oninput = drawI;
