@@ -10,6 +10,14 @@
   var root = document.getElementById("doiter-po"), D = {};
   var dataEl = document.getElementById("doiter-po-data");
   if (dataEl) { try { D = JSON.parse(dataEl.textContent); } catch (e) { D = {}; } }
+  // The list may carry the create form's data as D.next: its button redraws this widget with it in place,
+  // and Back redraws the list (D.back), with no chat message.
+  var SRC = (document.currentScript || {}).src;
+  var reinit = function (obj) {
+    if (!SRC || !dataEl) return false;
+    dataEl.textContent = JSON.stringify(obj); root.innerHTML = "";
+    var sc = document.createElement("script"); sc.src = SRC; document.body.appendChild(sc); return true;
+  };
   if (!root) return;
   var pos = D.pos || [], vendors = D.vendors || [], items = D.items || [], vp = D.vp || {};
   // v10 packed data (smaller, so the chat writes less). List: { c:1, v:{V035:"Vishwak Packaging"}, pp:"PO/26-27/",
@@ -180,8 +188,11 @@
 
   $("dp-q").oninput = drawList;
   // packed list data carries no products: ask the chat for the create form, which carries only those
-  $("dp-new").onclick = function () { if (D.c && D.mode !== "create") sendPrompt("create po"); else showForm(); };
-  $("dp-back").onclick = showList;
+  $("dp-new").onclick = function () {
+    if (D.next && reinit(Object.assign({}, D.next, { back: D }))) return;
+    if (D.c && D.mode !== "create") sendPrompt("create po"); else showForm();
+  };
+  $("dp-back").onclick = function () { if (D.back && reinit(D.back)) return; showList(); };
   $("dp-vq").oninput = drawV;
   $("dp-iq").oninput = drawI;
   $("dp-tg").onclick = function () { showAll = !showAll; drawI(); };
