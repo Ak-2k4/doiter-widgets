@@ -23,7 +23,8 @@
     + ".dp-b{font-size:12px;padding:2px 8px;border-radius:999px;white-space:nowrap}"
     + ".dp-s{position:relative}.dp-s i{position:absolute;left:10px;top:9px;font-size:16px;color:var(--text-muted)}"
     + ".dp-s input{width:100%;padding-left:34px !important;box-sizing:border-box}"
-    + ".dp-k{background:none;border:0;padding:0;color:var(--text-accent);cursor:pointer;font-size:13px}";
+    + ".dp-k{background:none;border:0;padding:0;color:var(--text-accent);cursor:pointer;font-size:13px}"
+    + "#doiter-po [hidden]{display:none !important}";   // an inline display style must not show a hidden section
   var st = document.createElement("style"); st.textContent = css; document.head.appendChild(st);
 
   var $ = function (i) { return document.getElementById(i); };
