@@ -1,4 +1,4 @@
-/* Doiter indent form for the Claude chat (v13: no vendor; every product is listed).
+/* Doiter indent form for the Claude chat (v14: no vendor; every product is listed, in a scrolling list).
    The chat writes only the data, as JSON in <script type="application/json" id="doiter-indent-data">,
    then one <script src> for this file. The data looks like:
      { items:   [["61260","Air bubble cover 10x13","NOS"], ...],
@@ -16,7 +16,7 @@
   var dept = D.dept || depts[0], Q = {};
 
   var css = ".di-r{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:.5px solid var(--border);font-size:14px}"
-    + ".di-r:last-child{border-bottom:0}.di-L{border:.5px solid var(--border);border-radius:var(--radius);margin-top:6px}"
+    + ".di-r:last-child{border-bottom:0}.di-L{border:.5px solid var(--border);border-radius:var(--radius);margin-top:6px;max-height:300px;overflow-y:auto}"
     + ".di-l{font-size:13px;color:var(--text-secondary);margin:0 0 6px}.di-c{font-family:var(--font-mono);font-size:13px}"
     + ".di-m{font-size:12px;color:var(--text-muted)}.di-p{font-size:13px;padding:6px 12px;border-radius:999px;"
     + "border:.5px solid var(--border-strong);background:transparent;cursor:pointer;color:var(--text-primary)}"
