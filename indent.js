@@ -1,5 +1,6 @@
-/* Doiter indent form for the Claude chat (v2: vendor list inside the form).
-   The chat writes only the data, as window.DOITER_INDENT, then one <script src> for this file:
+/* Doiter indent form for the Claude chat (v3: vendor list inside the form).
+   The chat writes only the data, as JSON in <script type="application/json" id="doiter-indent-data">,
+   then one <script src> for this file. The data looks like:
      { vendors: [["V035","Vishwak Packaging"], ...],
        items:   [["61260","Air bubble cover 10x13","NOS"], ...],
        vp:      { V035: ["61260", ...], ... },          // which vendor supplies which products
@@ -7,7 +8,11 @@
    It draws into <div id="doiter-indent"> and on "Raise indent" sends one sentence to the chat
    with sendPrompt(). No business data lives in this file. */
 (function () {
-  var D = window.DOITER_INDENT || {}, root = document.getElementById("doiter-indent");
+  // The data comes in <script type="application/json" id="doiter-indent-data">, which exists before
+  // any script runs, so it doesn't matter whether this file loads before or after the chat's own script.
+  var root = document.getElementById("doiter-indent"), D = window.DOITER_INDENT || {};
+  var dataEl = document.getElementById("doiter-indent-data");
+  if (dataEl) { try { D = JSON.parse(dataEl.textContent); } catch (e) { D = {}; } }
   if (!root) return;
   var vendors = D.vendors || [], items = D.items || [], vp = D.vp || {}, depts = D.depts || ["Maintenance"];
   var vendor = D.vendor || (vendors[0] || [""])[0], dept = D.dept || depts[0], showAll = false, Q = {};
@@ -19,7 +24,7 @@
     + "border:.5px solid var(--border-strong);background:transparent;cursor:pointer;color:var(--text-primary)}"
     + ".di-p[aria-pressed=true]{background:var(--bg-accent);color:var(--text-accent);border-color:var(--border-accent)}"
     + ".di-s{position:relative}.di-s i{position:absolute;left:10px;top:9px;font-size:16px;color:var(--text-muted)}"
-    + ".di-s input{width:100%;padding-left:32px}";
+    + ".di-s input{width:100%;padding-left:34px !important;box-sizing:border-box}";
   var st = document.createElement("style"); st.textContent = css; document.head.appendChild(st);
 
   root.innerHTML =
