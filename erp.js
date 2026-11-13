@@ -117,7 +117,27 @@
     box.querySelectorAll("[data-n]").forEach(function (b) { b.onclick = function () { var t = s.items[+b.getAttribute("data-n")]; if (typeof t[2] === "number") page(t[2]); else send(t[1]); }; });
   }
 
+  // Packed lists (smaller for the chat to write): rows as arrays in s.rk order, row buttons as one template per
+  // status in s.acts ({=key} = that row's value), shared detail labels (s.dlc, s.dfl) and item names (s.dx at column s.dd).
+  function unpack(s) {
+    if (!s.rk) return;
+    var fill = function (b, r) { return b.map(function (x) { return typeof x === "string" ? x.replace(/\{=(\w+)\}/g, function (m, k) { return r[k] == null ? "" : r[k]; }) : x; }); };
+    s.rows = (s.rows || []).map(function (a) {
+      var r = {}; s.rk.forEach(function (k, i) { if (a[i] !== undefined && a[i] !== null) r[k] = a[i]; });
+      if (!r._a && s.acts && s.acts[r._s]) r._a = s.acts[r._s].map(function (b) { return fill(b, r); });
+      var d = r._d;
+      if (d) {
+        if (s.dlc && !d.lc) d.lc = s.dlc;
+        if (s.dfl) d.f = s.dfl.map(function (l, i) { return [l, d.f ? d.f[i] : ""]; });
+        if (s.dx && s.dd != null && d.lr) d.lr = d.lr.map(function (x) { x = x.slice(); x.splice(s.dd, 0, s.dx[x[0]] == null ? "" : s.dx[x[0]]); return x; });
+      }
+      return r;
+    });
+    delete s.rk;
+  }
+
   function list(box, s, si) {
+    unpack(s);
     var rows = s.rows || [], cols = s.cols || [], f = s.filter, cur = f ? f.def || "ALL" : "ALL", open = {}, ask = {};
     var counts = {}; rows.forEach(function (r) { counts[r._s] = (counts[r._s] || 0) + 1; });
     box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap">'
