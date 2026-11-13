@@ -5,7 +5,9 @@
 
    Data: { sections: [ section, ... ] }
      { t:"tiles", items:[[label, value, note]] }
-     { t:"nav", items:[[label, sentence]] }
+     { t:"nav", items:[[label, sentence, page]] }   (with a page number the button opens that bundled screen in place)
+     { t:"ext", id:"po", src: script url, data:{...} }   (a screen drawn by its own engine, e.g. po.js / grn.js)
+   Any section may carry pg: n (drawn on page n; the dashboard is page 0); D.pages = { n: title }.
      { t:"list", title, cols:[[key, label, fmt]] (fmt: "m" money, "n" number, "r" right, "b" badge),
        rows:[{ key: value, ..., _s: status, _d: { f:[[label, value]], lc:[labels], lr:[[cells]] }, _a:[[label, sentence, askLabel]] }],
        filter:{ def, opts:[[status, label]] }, search: placeholder, top:[[label, sentence]], empty }
@@ -15,7 +17,8 @@
        lines:{ l, items:{ code:[name, uom, hint] }, by: field key, map:{ value:[[code, qty, rate]] }, all: true,
                cols:[{ k, l, type: number|text|select, o, req, def: index into map row }], free: true (typed rows) }, hid: true (drawn only when opened) }
    A list's top button [label, sentence, formIndex] or a row action [label, sentence, null, formIndex, {field: value, _head, _title}]
-   opens that hidden form in place (values prefill it), with a Back button; without a formIndex the sentence goes to the chat.   */
+   opens that hidden form in place (values prefill it), with a Back button; without a formIndex the sentence goes to the chat.
+   A top button [label, sentence, null, page] or row action [label, sentence, null, null, null, page] opens that page instead.   */
 (function () {
   var root = document.getElementById("doiter-erp"), D = {};
   var dataEl = document.getElementById("doiter-erp-data");
@@ -68,14 +71,20 @@
 
   var wrap = el('<div class="de-w"></div>').firstChild;
   root.appendChild(wrap);
-  var SEC = D.sections || [], BOX = [];
+  // Pages: the dashboard is page 0; each screen bundled with it is page n (section.pg), opened by its nav button.
+  var SEC = D.sections || [], BOX = [], DRAWN = [], PG = 0, PT = D.pages || {};
   var draw1 = function (box, s, i, vals) {
-    try { ({ tiles: tiles, nav: nav, list: list, form: form }[s.t] || function () {})(box, s, i, vals); }
+    DRAWN[i] = true;
+    try { ({ tiles: tiles, nav: nav, list: list, form: form, ext: ext }[s.t] || function () {})(box, s, i, vals); }
     catch (e) { box.innerHTML = '<p class="de-e">This part could not be drawn: ' + esc(e.message) + "</p>"; }
   };
+  var bar = el('<div style="display:none;align-items:center;gap:10px"><button type="button" class="bk">← Dashboard</button><span class="de-h" style="margin:0"></span></div>').firstChild;
+  wrap.appendChild(bar);
+  bar.querySelector(".bk").onclick = function () { page(0); };
+  var shown = function (j) { return (SEC[j].pg || 0) === PG && !SEC[j].hid; };
   SEC.forEach(function (s, i) {
     var box = document.createElement("div"); wrap.appendChild(box); BOX.push(box);
-    if (s.hid) box.style.display = "none"; else draw1(box, s, i);
+    if (shown(i)) draw1(box, s, i); else box.style.display = "none";
   });
   // A "+ New" button or a row's Edit opens a form shipped with the list, in place: no chat message.
   function go(i, vals) {
@@ -83,7 +92,19 @@
     draw1(BOX[i], SEC[i], i, vals || null);
     try { BOX[i].scrollIntoView({ block: "start" }); } catch (e) {}
   }
-  function back() { BOX.forEach(function (b, j) { b.style.display = SEC[j].hid ? "none" : ""; }); }
+  function back() { BOX.forEach(function (b, j) { var v = shown(j); if (v && !DRAWN[j]) draw1(b, SEC[j], j); b.style.display = v ? "" : "none"; }); }
+  function page(p) {
+    PG = p; bar.style.display = p ? "flex" : "none"; bar.querySelector(".de-h").textContent = PT[p] || "";
+    back();
+    try { wrap.scrollIntoView({ block: "start" }); } catch (e) {}
+  }
+  // A screen with its own engine (POs, GRN): its data and script are added the first time it is opened.
+  function ext(box, s) {
+    box.innerHTML = '<div id="doiter-' + esc(s.id) + '"></div>';
+    var d = document.createElement("script"); d.type = "application/json"; d.id = "doiter-" + s.id + "-data";
+    d.textContent = JSON.stringify(s.data || {}); box.appendChild(d);
+    var sc = document.createElement("script"); sc.src = s.src; box.appendChild(sc);
+  }
 
   function tiles(box, s) {
     box.innerHTML = (s.title ? '<p class="de-h">' + esc(s.title) + "</p>" : "") + '<div class="de-t">' + (s.items || []).map(function (t) {
@@ -93,7 +114,7 @@
   function nav(box, s) {
     box.innerHTML = (s.title ? '<p class="de-l">' + esc(s.title) + "</p>" : "") + '<div style="display:flex;flex-wrap:wrap;gap:8px">'
       + (s.items || []).map(function (b, i) { return '<button type="button" class="de-p" data-n="' + i + '">' + esc(b[0]) + "</button>"; }).join("") + "</div>";
-    box.querySelectorAll("[data-n]").forEach(function (b) { b.onclick = function () { send(s.items[+b.getAttribute("data-n")][1]); }; });
+    box.querySelectorAll("[data-n]").forEach(function (b) { b.onclick = function () { var t = s.items[+b.getAttribute("data-n")]; if (typeof t[2] === "number") page(t[2]); else send(t[1]); }; });
   }
 
   function list(box, s, si) {
@@ -106,7 +127,7 @@
       + (s.search !== false ? '<div class="de-s"><i class="ti ti-search" aria-hidden="true"></i><input class="q" placeholder="' + esc(s.search || "Search") + '" aria-label="Search"></div>' : "")
       + '<div class="de-L body"></div>';
     var q = box.querySelector(".q"), body = box.querySelector(".body"), fl = box.querySelector(".fl");
-    box.querySelectorAll("[data-top]").forEach(function (b) { b.onclick = function () { var t = s.top[+b.getAttribute("data-top")]; if (typeof t[2] === "number") go(t[2]); else send(t[1]); }; });
+    box.querySelectorAll("[data-top]").forEach(function (b) { b.onclick = function () { var t = s.top[+b.getAttribute("data-top")]; if (typeof t[3] === "number") page(t[3]); else if (typeof t[2] === "number") go(t[2]); else send(t[1]); }; });
     function drawF() {
       if (!fl) return;
       var opts = f.opts.concat([["ALL", "All"]]);
@@ -154,7 +175,8 @@
       body.querySelectorAll("[data-a]").forEach(function (x) {
         x.onclick = function () {
           var p = x.getAttribute("data-a").split(":"), b = rows[+p[0]]._a[+p[1]];
-          if (typeof b[3] === "number") go(b[3], b[4]);
+          if (typeof b[5] === "number") page(b[5]);
+          else if (typeof b[3] === "number") go(b[3], b[4]);
           else if (b[2]) { ask[p[0]] = +p[1]; draw(); var inp = body.querySelector('.ask[data-i="' + p[0] + '"]'); if (inp) inp.focus(); }
           else send(b[1]);
         };
