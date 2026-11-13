@@ -75,7 +75,7 @@
   var SEC = D.sections || [], BOX = [], DRAWN = [], PG = 0, PT = D.pages || {};
   var draw1 = function (box, s, i, vals) {
     DRAWN[i] = true;
-    try { ({ tiles: tiles, nav: nav, list: list, form: form, ext: ext }[s.t] || function () {})(box, s, i, vals); }
+    try { ({ hd: hd, tiles: tiles, nav: nav, list: list, form: form, ext: ext }[s.t] || function () {})(box, s, i, vals); }
     catch (e) { box.innerHTML = '<p class="de-e">This part could not be drawn: ' + esc(e.message) + "</p>"; }
   };
   var bar = el('<div style="display:none;align-items:center;gap:10px"><button type="button" class="bk">← Dashboard</button><span class="de-h" style="margin:0"></span></div>').firstChild;
@@ -106,14 +106,32 @@
     var sc = document.createElement("script"); sc.src = s.src; box.appendChild(sc);
   }
 
+  // Optional colour (only where the data asks for it, e.g. the dashboard): s.hues = one colour per tile / nav button,
+  // a list's s.hue colours its title; {t:"hd", title, sub, hue} is a tinted header strip.
+  function hueCss() {
+    if (document.getElementById("de-hue-css")) return;
+    var css = ".de-hue{--tint:color-mix(in srgb,var(--hue) 13%,transparent);--edge:color-mix(in srgb,var(--hue) 40%,transparent)}"
+    + ".de-tile.de-hue{background:var(--tint);border-color:var(--edge)}.de-tile.de-hue b{color:var(--hue)}"
+    + ".de-p.de-hue{border-color:var(--edge)}.de-p.de-hue:hover{background:var(--tint);border-color:var(--hue)}"
+    + ".de-hd{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:12px 14px;border-radius:12px;background:var(--tint)}"
+    + ".de-hd b{font-size:17px;font-weight:500;color:var(--hue)}.de-hd span{font-size:12px;color:var(--text-secondary)}"
+    + ".de-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--hue);margin-right:8px;vertical-align:1px}";
+    var hs = document.createElement("style"); hs.id = "de-hue-css"; hs.textContent = css; document.head.appendChild(hs);
+  }
+  function hueAttr(h) { hueCss(); return h ? ' style="--hue:' + esc(h) + '"' : ""; }
+  function hd(box, s) {
+    box.innerHTML = '<div class="de-hd de-hue"' + hueAttr(s.hue || "#e0453e") + "><b>" + esc(s.title) + "</b>" + (s.sub ? "<span>" + esc(s.sub) + "</span>" : "") + "</div>";
+  }
   function tiles(box, s) {
-    box.innerHTML = (s.title ? '<p class="de-h">' + esc(s.title) + "</p>" : "") + '<div class="de-t">' + (s.items || []).map(function (t) {
-      return '<div class="de-tile"><span class="de-m">' + esc(t[0]) + "</span><b>" + esc(t[1]) + "</b>" + (t[2] ? '<span class="de-m">' + esc(t[2]) + "</span>" : "") + "</div>";
+    var H = s.hues || [];
+    box.innerHTML = (s.title ? '<p class="de-h">' + esc(s.title) + "</p>" : "") + '<div class="de-t">' + (s.items || []).map(function (t, i) {
+      return '<div class="de-tile' + (H[i] ? " de-hue" : "") + '"' + hueAttr(H[i]) + '><span class="de-m">' + esc(t[0]) + "</span><b>" + esc(t[1]) + "</b>" + (t[2] ? '<span class="de-m">' + esc(t[2]) + "</span>" : "") + "</div>";
     }).join("") + "</div>";
   }
   function nav(box, s) {
+    var H = s.hues || [];
     box.innerHTML = (s.title ? '<p class="de-l">' + esc(s.title) + "</p>" : "") + '<div style="display:flex;flex-wrap:wrap;gap:8px">'
-      + (s.items || []).map(function (b, i) { return '<button type="button" class="de-p" data-n="' + i + '">' + esc(b[0]) + "</button>"; }).join("") + "</div>";
+      + (s.items || []).map(function (b, i) { return '<button type="button" class="de-p' + (H[i] ? " de-hue" : "") + '"' + hueAttr(H[i]) + ' data-n="' + i + '">' + (H[i] ? '<span class="de-dot"></span>' : "") + esc(b[0]) + "</button>"; }).join("") + "</div>";
     box.querySelectorAll("[data-n]").forEach(function (b) { b.onclick = function () { var t = s.items[+b.getAttribute("data-n")]; if (typeof t[2] === "number") page(t[2]); else send(t[1]); }; });
   }
 
@@ -141,7 +159,7 @@
     var rows = s.rows || [], cols = s.cols || [], f = s.filter, cur = f ? f.def || "ALL" : "ALL", open = {}, ask = {};
     var counts = {}; rows.forEach(function (r) { counts[r._s] = (counts[r._s] || 0) + 1; });
     box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap">'
-      + (s.title ? '<p class="de-h">' + esc(s.title) + "</p>" : "<span></span>")
+      + (s.title ? '<p class="de-h">' + (s.hue ? '<span class="de-dot"' + hueAttr(s.hue) + '></span>' : "") + esc(s.title) + "</p>" : "<span></span>")
       + '<div style="display:flex;gap:8px;flex-wrap:wrap">' + (s.top || []).map(function (b, i) { return '<button type="button" data-top="' + i + '">' + esc(b[0]) + "</button>"; }).join("") + "</div></div>"
       + (f ? '<div class="fl" style="display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px"></div>' : "")
       + (s.search !== false ? '<div class="de-s"><i class="ti ti-search" aria-hidden="true"></i><input class="q" placeholder="' + esc(s.search || "Search") + '" aria-label="Search"></div>' : "")
