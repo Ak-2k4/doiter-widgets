@@ -142,6 +142,8 @@
     var fill = function (b, r) { return b.map(function (x) { return typeof x === "string" ? x.replace(/\{=(\w+)\}/g, function (m, k) { return r[k] == null ? "" : r[k]; }) : x; }); };
     s.rows = (s.rows || []).map(function (a) {
       var r = {}; s.rk.forEach(function (k, i) { if (a[i] !== undefined && a[i] !== null) r[k] = a[i]; });
+      if (s.sd && typeof r._s === "number") r._s = s.sd[r._s];
+      if (s.cp) for (var ck in s.cp) if (typeof r[ck] === "string") r[ck] = s.cp[ck] + r[ck];
       if (!r._a && s.acts && s.acts[r._s]) r._a = s.acts[r._s].map(function (b) { return fill(b, r); });
       var d = r._d;
       if (d) {
@@ -151,7 +153,7 @@
       }
       return r;
     });
-    delete s.rk;
+    delete s.rk; delete s.sd; delete s.cp;
   }
 
   function list(box, s, si) {
