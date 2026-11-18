@@ -25,6 +25,41 @@
   if (dataEl) { try { D = JSON.parse(dataEl.textContent); } catch (e) { D = {}; } }
   if (!root) return;
 
+  /* Form presets: a section { p:"vendor_add", hid:true } is filled in here with the fixed form layout, so the chat
+     writes only the lists that change (D.opts: pt, items, uom, cat, hsn). Anything the section sets itself wins. */
+  var PRE = (function () {
+    var T = function (k, l, extra) { var f = { k: k, l: l, type: "text" }; for (var x in extra || {}) f[x] = extra[x]; return f; };
+    var N = function (k, l, extra) { var f = T(k, l, extra); f.type = "number"; return f; };
+    var pairs = function (a) { return (a || []).map(function (x) { return typeof x === "string" ? [x, x] : x; }); };
+    var status3 = [["ACTIVE", "Active"], ["INACTIVE", "Inactive"], ["BLOCKED", "Blocked"]];
+    var types = [["MANUFACTURING", "Manufacturing"], ["TRADING", "Trading"], ["SERVICE", "Service"], ["CONSUMABLE", "Consumable"], ["CAPITAL", "Capital"]];
+    var itemFields = function (o, edit) {
+      return [T("description", "Description", { req: true })]
+        .concat(edit ? [] : [T("code", "Item code", { ph: "left blank: next free code" })])
+        .concat([{ k: "uom", l: "Unit", type: "select", o: pairs(o.uom) }, { k: "category", l: "Category", type: "select", o: pairs(o.cat) },
+          { k: "hsn", l: "HSN / SAC", type: "select", o: pairs(o.hsn) }, { k: "type", l: "Material type", type: "chips", o: types },
+          N("price", edit ? "Last purchase price (₹)" : "Price (₹)")]);
+    };
+    return {
+      vendor_add: function () { return { t: "form", title: "Add a vendor", head: "add a vendor", send: "Add vendor", fields: [
+        T("name", "Vendor name", { req: true }), T("code", "Vendor code", { ph: "left blank: next free code" }), T("city", "City"), T("pin", "PIN"), T("gstin", "GSTIN"),
+        T("contact", "Contact person"), T("designation", "Designation"), T("mobile", "Mobile"), T("phone", "Phone"), T("email", "Email")] }; },
+      vendor_edit: function (o) { return { t: "form", title: "Edit vendor", head: "update vendor", send: "Save changes", changed: true, pf: 1, ht: ["update vendor {0}", "Edit vendor {0} · {1}"], fields: [
+        T("name", "Vendor name", { req: true }), T("city", "City"), T("pin", "PIN"), T("gstin", "GSTIN"), T("street", "Street address"), T("pan", "PAN"),
+        N("credit_days", "Credit days"), { k: "payment_terms", l: "Payment terms", type: "select", o: pairs(o.pt) }, { k: "status", l: "Status", type: "chips", o: status3 }] }; },
+      vendor_price: function (o) { return { t: "form", title: "Item price for this vendor", head: "set vendor price", send: "Save price", ht: ["set {0} price", "Item price for {0} · {1}"], fields: [
+        { k: "item", l: "Item", type: "pick", req: true, o: o.items || [] }, N("price", "Price (₹)", { req: true }), N("lead_days", "Lead days"), N("moq", "Minimum order qty"),
+        T("vendor_item_code", "Vendor's item code")] }; },
+      item_add: function (o) { var f = itemFields(o, false); f[2].req = true; f[2].def = "NOS"; return { t: "form", title: "Add an item", head: "add an item", send: "Add item", fields: f }; },
+      item_edit: function (o) { return { t: "form", title: "Edit item", head: "update item", send: "Save changes", changed: true, pf: 1, ht: ["update item {0}", "Edit item {0} · {1}"],
+        fields: itemFields(o, true).concat([N("reorder_level", "Reorder level"), N("min_stock", "Min stock"), N("max_stock", "Max stock"),
+          { k: "status", l: "Status", type: "chips", o: [["ACTIVE", "Active"], ["INACTIVE", "Inactive"]] }]) }; }
+    };
+  })();
+  (D.sections || []).forEach(function (s) {
+    if (s.t === "form" && s.p && PRE[s.p]) { var b = PRE[s.p](D.opts || {}); for (var k in b) if (s[k] == null) s[k] = b[k]; }
+  });
+
   var css = ".de-w{display:grid;gap:20px;padding:.5rem 0;font-size:14px}"
     + ".de-L{border:.5px solid var(--border);border-radius:var(--radius);margin-top:6px;max-height:340px;overflow-y:auto}"
     + ".de-r{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:.5px solid var(--border)}.de-r:last-child{border-bottom:0}"
@@ -235,6 +270,12 @@
   }
 
   function form(box, s, si, vals) {
+    // short prefill: [code, value of field 1, value of field 2, ...]; the heading comes from the form's ht templates
+    if (Array.isArray(vals)) {
+      var a = vals, o = { _head: s.ht[0].replace("{0}", a[0]), _title: s.ht[1].replace("{0}", a[0]).replace("{1}", a[1]) };
+      if (s.pf) (s.fields || []).forEach(function (f, n) { o[f.k] = a[n + 1]; });
+      vals = o;
+    }
     if (vals) s = Object.assign({}, s, { head: vals._head || s.head, title: vals._title || s.title,
       fields: (s.fields || []).map(function (f) { return f.k in vals ? Object.assign({}, f, { def: vals[f.k] }) : f; }) });
     var F = s.fields || [], LN = s.lines, V = {}, Q = {}, R = [], P = "f" + si + "-";
